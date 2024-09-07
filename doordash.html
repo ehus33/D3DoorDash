@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interactive Tips vs Commute Time</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f8f9fa;
+      color: #343a40;
+    }
+    .chart-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    svg {
+      background-color: #f5f5f5;
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+    }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 12px;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .predicted-point {
+      stroke: #333;
+      stroke-width: 2px;
+    }
+    .form-section {
+      margin-top: 30px;
+    }
+    #prediction-result {
+      margin-top: 10px;
+    }
+    label {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Container to center content and add padding -->
+  <div class="container mt-5">
+
+    <!-- Title -->
+    <h1 class="text-center mb-4">Tips vs Commute Time</h1>
+
+    <!-- Row for D3 visualization -->
+    <div class="row justify-content-center">
+      <div class="col-lg-8 chart-container">
+        <div class="chart">
+          <svg width="100%" height="400"></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Date Dropdown -->
+    <div class="row justify-content-center form-section">
+      <div class="col-md-6">
+        <div class="input-group mb-3">
+          <label class="input-group-text" for="day-dropdown">Select Day:</label>
+          <select id="day-dropdown" class="form-select">
+            <option value="all">All Days</option>
+            <option value="31-Aug">Saturday</option>
+            <option value="1-Sep">Sunday</option>
+            <option value="2-Sep">Monday</option>
+            <option value="3-Sep">Tuesday</option>
+            <option value="4-Sep">Wednesday</option>
+            <option value="5-Sep">Thursday</option>
+            <option value="6-Sep">Friday</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tip Input Section -->
+    <div class="row justify-content-center form-section">
+      <div class="col-md-6">
+        <div class="input-group mb-3">
+          <input type="number" id="tip-input" class="form-control" placeholder="Enter Tip Amount ($)" step="0.1" min="0">
+          <button id="predict-btn" class="btn btn-primary">Predict Commute Time</button>
+        </div>
+        <div id="prediction-result" class="alert alert-info text-center" style="display: none;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Data (as from your CSV including restaurant names)
+    const data = [
+      {date: '31-Aug', restaurant: "McDonald's", pay: 2, tips: 4, time: 20},
+      {date: '31-Aug', restaurant: "Sonic Drive-In", pay: 2, tips: 5, time: 30},
+      {date: '31-Aug', restaurant: "Wayback Burgers", pay: 2.75, tips: 2, time: 35},
+      {date: '31-Aug', restaurant: "Rendezvous Pizza", pay: 4.5, tips: 6, time: 40},
+      {date: '31-Aug', restaurant: "Church's Chicken", pay: 2, tips: 7, time: 20},
+      {date: '1-Sep', restaurant: "Cajun Corner", pay: 4.75, tips: 0, time: 60},
+      {date: '1-Sep', restaurant: "Qdoba", pay: 2, tips: 4.5, time: 25},
+      {date: '1-Sep', restaurant: "Schlotzky's", pay: 3, tips: 5, time: 10},
+      {date: '1-Sep', restaurant: "Swig", pay: 4.25, tips: 1, time: 10},
+      {date: '1-Sep', restaurant: "Taco Bell", pay: 2, tips: 1.5, time: 10},
+      {date: '1-Sep', restaurant: "The Catch", pay: 3, tips: 0, time: 10},
+      {date: '1-Sep', restaurant: "Jersey Mike's Subs", pay: 2.75, tips: 5, time: 20},
+      {date: '2-Sep', restaurant: "McDonald's", pay: 2, tips: 8, time: 30},
+      {date: '2-Sep', restaurant: "Krispy Krunchy Chicken", pay: 2, tips: 10, time: 20},
+      {date: '2-Sep', restaurant: "Wingstop", pay: 5.5, tips: 3.9, time: 50},
+      {date: '2-Sep', restaurant: "Swadley's", pay: 2, tips: 3, time: 10},
+      {date: '3-Sep', restaurant: "Tropical Smoothie Café", pay: 2, tips: 2.5, time: 10},
+      {date: '3-Sep', restaurant: "Pho B&B", pay: 2.5, tips: 4.5, time: 15},
+      {date: '4-Sep', restaurant: "Chick-fil-A", pay: 2, tips: 3.5, time: 20},
+      {date: '4-Sep', restaurant: "Panera Bread", pay: 5.75, tips: 8, time: 35},
+      {date: '6-Sep', restaurant: "Emerald Elite THC", pay: 8.75, tips: 6, time: 35},
+      {date: '6-Sep', restaurant: "Modern Berry", pay: 5.5, tips: 2, time: 20},
+    ];
+
+    const margin = {top: 20, right: 30, bottom: 60, left: 60},
+          width = 600 - margin.left - margin.right,
+          height = 400 - margin.top - margin.bottom;
+
+    const svg = d3.select("svg")
+      .attr("viewBox", `0 0 600 400`)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleLinear()
+      .domain([0, d3.max(data, d => d.tips)]) // Tips scale
+      .range([0, width]);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(data, d => d.time)]) // Commute time scale
+      .range([height, 0]);
+
+    // X-axis
+    const xAxis = svg.append("g")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(x).ticks(5));
+
+    // X-axis label
+    svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("x", width / 2)
+      .attr("y", height + margin.bottom - 20)
+      .text("Tips ($)");
+
+    // Y-axis
+    const yAxis = svg.append("g")
+      .call(d3.axisLeft(y).ticks(5));
+
+    // Y-axis label
+    svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("transform", "rotate(-90)")
+      .attr("x", -height / 2)
+      .attr("y", -40)
+      .text("Commute Time (Minutes)");
+
+    // Function to update the chart based on the selected day
+    function updateChart(filteredData) {
+      const circles = svg.selectAll("circle").data(filteredData, d => d.tips);
+
+      // Exit
+      circles.exit()
+        .transition()
+        .duration(750)
+        .attr("r", 0)
+        .remove();
+
+      // Update existing circles
+      circles.transition()
+        .duration(750)
+        .attr("cx", d => x(d.tips))
+        .attr("cy", d => y(d.time))
+        .attr("r", 5);
+
+      // Enter new circles
+      circles.enter()
+        .append("circle")
+        .attr("cx", d => x(d.tips))
+        .attr("cy", d => y(d.time))
+        .attr("r", 0)
+        .attr("fill", "steelblue")
+        .transition()
+        .duration(750)
+        .attr("r", 5);
+    }
+    // Tooltip for hover
+    const tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "tooltip");
+
+    // Initialize with all data
+    updateChart(data);
+
+    // Handle dropdown change
+    document.getElementById("day-dropdown").addEventListener("change", function() {
+      const selectedDay = this.value;
+
+      // Filter data based on selected day
+      const filteredData = selectedDay === 'all' ? data : data.filter(d => d.date === selectedDay);
+      updateChart(filteredData);
+    });
+
+    // Predict commute time using simple linear regression coefficients
+    const predictCommuteTime = (tipAmount) => {
+      const slope = -0.5; // Sample slope, replace with real model coefficients
+      const intercept = 10; // Sample intercept
+      return slope * tipAmount + intercept;
+    };
+
+    document.getElementById("predict-btn").addEventListener("click", function() {
+      const tipAmount = parseFloat(document.getElementById("tip-input").value);
+      if (isNaN(tipAmount)) {
+        document.getElementById("prediction-result").innerHTML = "Please enter a valid tip amount.";
+        document.getElementById("prediction-result").style.display = "block";
+        return;
+      }
+      
+      const predictedTime = predictCommuteTime(tipAmount).toFixed(2);
+      document.getElementById("prediction-result").innerHTML = `Predicted Commute Time: ${predictedTime} minutes`;
+      document.getElementById("prediction-result").style.display = "block";
+
+      svg.selectAll(".predicted-point").remove();
+      svg.append("circle")
+        .attr("cx", x(tipAmount))
+        .attr("cy", y(predictedTime))
+        .attr("r", 0)
+        .attr("fill", "red")
+        .attr("class", "predicted-point")
+        .transition()
+        .duration(750)
+        .attr("r", 6);
+    });
+
+    svg.selectAll("circle")
+      .on("mouseover", function(event, d) {
+        tooltip.style("visibility", "visible")
+          .text(`Tip: $${d.tips}, Time: ${d.time} mins, Restaurant: ${d.restaurant}`);
+      })
+      .on("mousemove", function(event) {
+        tooltip.style("top", (event.pageY - 50) + "px")
+          .style("left", (event.pageX - 25) + "px")
+          .style("opacity", 1);
+      })
+      .on("mouseout", function() {
+        tooltip.style("visibility", "hidden")
+          .style("opacity", 0);
+      });
+
+  </script>
+</body>
+</html>
